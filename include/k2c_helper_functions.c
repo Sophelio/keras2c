@@ -60,17 +60,23 @@ void k2c_matmul(float * C, const float * A, const float * B, const size_t outrow
 void k2c_affine_matmul(float * C, const float * A, const float * B, const float * d,
                        const size_t outrows,const size_t outcols, const size_t innerdim) {
 
-    // make sure output is empty
-    memset(C, 0, outrows*outcols*sizeof(C[0]));
+    for (size_t i = 0; i < outrows; ++i) {
+        const size_t ri = i*outcols;
+        for (size_t j = 0; j < outcols; ++j)
+            C[ri+j] = d[j];
+    }
 
-    for (size_t i = 0 ; i < outrows; ++i) {
-        const size_t outrowidx = i*outcols;
-        const size_t inneridx = i*innerdim;
-        for (size_t j = 0;  j < outcols; ++j) {
-            for (size_t k = 0; k < innerdim; ++k) {
-                C[outrowidx+j] += A[inneridx+k] * B[k*outcols+j];
-            }
-            C[outrowidx+j] += d[j];
+    /* i-k-j loop order: B is accessed with stride 1, enabling
+       auto-vectorization. The scalar A[ki+k] is broadcast across the
+       inner j-loop. */
+    for (size_t i = 0; i < outrows; ++i) {
+        const size_t ri = i*outcols;
+        const size_t ki = i*innerdim;
+        for (size_t k = 0; k < innerdim; ++k) {
+            const float a_val = A[ki+k];
+            const float *b_row = &B[k*outcols];
+            for (size_t j = 0; j < outcols; ++j)
+                C[ri+j] += a_val * b_row[j];
         }
     }
 }

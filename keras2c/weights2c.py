@@ -73,11 +73,14 @@ class Weights2C():
             return s, to_malloc
         else:
             count = 0
-            s = 'float ' + name + '_array[' + str(size) + '] = '
-            if np.max(np.abs(temp)) < 1e-16:
-                s += '{' + str(0) + '}; \n'
+            is_zero = np.max(np.abs(temp)) < 1e-16
+            if is_zero:
+                # Output/scratch buffers — must be zeroed each call
+                s = 'float ' + name + '_array[' + str(size) + '] = {0}; \n'
             else:
-                s += '{\n'
+                # Weight arrays — make static so they are initialized once
+                # at program load rather than copied to the stack every call
+                s = 'static float ' + name + '_array[' + str(size) + '] = {\n'
                 for i in range(size):
                     if temp[i] == np.inf:
                         s += "HUGE_VALF,"
@@ -419,7 +422,9 @@ class Weights2C():
 
         self._write_weights_array2c(A, layer.name + '_kernel')
         self._write_weights_array2c(b, layer.name + '_bias')
-        self.stack_vars += 'float ' + layer.name + \
+        # fwork is scratch space for k2c_dot (ndim>2 path only).
+        # Making it static avoids per-call memset of potentially large arrays.
+        self.stack_vars += 'static float ' + layer.name + \
             '_fwork[' + str(np.prod(layer.input.shape[1:]) +
                             np.prod(A.shape)) + '] = {0}; \n'
         self.stack_vars += '\n \n'

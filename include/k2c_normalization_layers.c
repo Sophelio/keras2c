@@ -34,11 +34,17 @@ void k2c_batch_norm(k2c_tensor* outputs, const k2c_tensor* inputs, const k2c_ten
     }
     const size_t step = inputs->shape[axis];
 
+    /* Precompute fused linear transform: out = in * scale + offs
+       This halves per-element work and eliminates the division. */
+    float scale[K2C_MAX_NDIM * 256];
+    float offs[K2C_MAX_NDIM * 256];
+    for (size_t j=0; j<step; ++j) {
+        scale[j] = gamma->array[j] / stdev->array[j];
+        offs[j]  = beta->array[j] - mean->array[j] * scale[j];
+    }
+
     for (size_t i=0; i<inputs->numel; ++i) {
         size_t idx = (i/offset)%step;
-        outputs->array[i] = (inputs->array[i] - mean->array[idx]) /
-                            stdev->array[idx] *
-                            gamma->array[idx] +
-                            beta->array[idx];
+        outputs->array[i] = inputs->array[i] * scale[idx] + offs[idx];
     }
 }
