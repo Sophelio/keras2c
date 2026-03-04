@@ -30,4 +30,11 @@ class Keras2CConfig(BaseModel):
         arbitrary_types_allowed = True
 
 
-Keras2CConfig.update_forward_refs(keras=keras)
+# Pydantic v2: model_rebuild(); v1: update_forward_refs(keras=...)
+try:
+    Keras2CConfig.model_rebuild(_types_namespace={"keras": keras})
+except (TypeError, AttributeError):
+    try:
+        Keras2CConfig.model_rebuild()
+    except (TypeError, AttributeError):
+        Keras2CConfig.update_forward_refs(keras=keras)

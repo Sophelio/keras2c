@@ -68,7 +68,8 @@ class Weights2C:
             return s, to_malloc
         else:
             count = 0
-            s = f'float {name}_array[{size}] = '
+            # static: weights live in data segment, avoid per-call stack init (~300KB+)
+            s = f'static float {name}_array[{size}] = '
             if np.max(np.abs(temp)) < 1e-16:
                 s += '{0}; \n'
             else:

@@ -49,6 +49,9 @@ void k2c_matmul(float * C, const float * A, const float * B, const size_t outrow
  row of A*B
  * assumes A,B,C are all 1d arrays of matrices stored in row major order
  *
+ * Cache-friendly i-k-j loop order: B is accessed with stride-1 (row-wise),
+ * enabling auto-vectorization (SSE/AVX). Bias is pre-loaded into output.
+ *
  * :param C: output array.
  * :param A: input array 1.
  * :param B: input array 2.
@@ -60,17 +63,22 @@ void k2c_matmul(float * C, const float * A, const float * B, const size_t outrow
 void k2c_affine_matmul(float * C, const float * A, const float * B, const float * d,
                        const size_t outrows,const size_t outcols, const size_t innerdim) {
 
-    // make sure output is empty
-    memset(C, 0, outrows*outcols*sizeof(C[0]));
-
-    for (size_t i = 0 ; i < outrows; ++i) {
-        const size_t outrowidx = i*outcols;
-        const size_t inneridx = i*innerdim;
-        for (size_t j = 0;  j < outcols; ++j) {
-            for (size_t k = 0; k < innerdim; ++k) {
-                C[outrowidx+j] += A[inneridx+k] * B[k*outcols+j];
-            }
-            C[outrowidx+j] += d[j];
+    /* Initialize output with bias vector */
+    for (size_t i = 0; i < outrows; ++i) {
+        const size_t ri = i * outcols;
+        for (size_t j = 0; j < outcols; ++j)
+            C[ri + j] = d[j];
+    }
+    /* Cache-friendly i-k-j: B accessed stride-1, enables vectorization */
+    for (size_t i = 0; i < outrows; ++i) {
+        const size_t ri = i * outcols;
+        const size_t ki = i * innerdim;
+        for (size_t k = 0; k < innerdim; ++k) {
+            const float a_val = A[ki + k];
+            const float *b_row = &B[k * outcols];
+            float *c_row = &C[ri];
+            for (size_t j = 0; j < outcols; ++j)
+                c_row[j] += a_val * b_row[j];
         }
     }
 }

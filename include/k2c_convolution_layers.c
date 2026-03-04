@@ -150,26 +150,30 @@ void k2c_conv1d(k2c_tensor* output, const k2c_tensor* input, const k2c_tensor* k
                 const k2c_tensor* bias, const size_t stride, const size_t dilation,
                 k2c_activationType *activation) {
 
-    memset(output->array,0,output->numel*sizeof(output->array[0]));
+    memset(output->array, 0, output->numel * sizeof(output->array[0]));
 
     const size_t out_times = output->shape[0];
-    const size_t out_channels = output->shape[1];
-    const size_t in_channels = input->shape[1];
+    const size_t out_ch = output->shape[1];
+    const size_t in_ch = input->shape[1];
+    const size_t ksize = kernel->shape[0];
+    const size_t kern_stride = kernel->shape[1] * kernel->shape[2];
 
-    for (size_t x0=0; x0 < out_times; ++x0) {
-        for (size_t z=0; z < kernel->shape[0]; ++z) {
-            for (size_t q=0; q < in_channels; ++q) {
-                for (size_t k=0; k < out_channels; ++k) {
-                    output->array[x0*out_channels + k] +=
-                        kernel->array[z*(kernel->shape[2]*kernel->shape[1]) +
-                                                                            q*(kernel->shape[2]) + k]*
-                        input->array[(x0*stride + dilation*z)*in_channels + q];
-                }
+    /* Hoist in_val and kernel ptr out of output-channel loop for stride-1 access */
+    for (size_t t = 0; t < out_times; ++t) {
+        float *out_ptr = &output->array[t * out_ch];
+        for (size_t z = 0; z < ksize; ++z) {
+            const float *kern_base = &kernel->array[z * kern_stride];
+            const float *in_base = &input->array[(t * stride + dilation * z) * in_ch];
+            for (size_t q = 0; q < in_ch; ++q) {
+                const float in_val = in_base[q];
+                const float *kp = &kern_base[q * kernel->shape[2]];
+                for (size_t k = 0; k < out_ch; ++k)
+                    out_ptr[k] += in_val * kp[k];
             }
         }
     }
-    k2c_bias_add(output,bias);
-    activation(output->array,output->numel);
+    k2c_bias_add(output, bias);
+    activation(output->array, output->numel);
 }
 
 

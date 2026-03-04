@@ -276,12 +276,20 @@ void k2c_ThresholdedReLU(float * x, const size_t size, const float theta) {
 void k2c_ReLU(float * x, const size_t size, const float max_value,
               const float alpha, const float theta) {
 
-    for (size_t i=0; i<size; ++i) {
+    /* Fast path: standard ReLU (alpha=0, theta=0, no max clamp) */
+    if (alpha == 0.0f && theta == 0.0f && max_value > 1e30f) {
+        for (size_t i = 0; i < size; ++i) {
+            if (x[i] < 0.0f) x[i] = 0.0f;
+        }
+        return;
+    }
+
+    for (size_t i = 0; i < size; ++i) {
         if (x[i] >= max_value) {
             x[i] = max_value;
         }
         else if (x[i] < theta) {
-            x[i] = alpha*(x[i] - theta);
+            x[i] = alpha * (x[i] - theta);
         }
     }
 }
